@@ -2,6 +2,7 @@
 // Distributed under the MIT license. See the LICENSE.md file in the project root for more information.
 
 using Stride.Core.Mathematics;
+using Stride.Graphics;
 using Stride.Rendering.Materials;
 
 namespace Stride.Rendering
@@ -38,5 +39,9 @@ namespace Stride.Rendering
         public Matrix[] BlendMatrices;
 
         public int InstanceCount;
+
+        public Buffer IndirectBuffer;
+
+        public int IndirectArgumentOffset;
     }
 }

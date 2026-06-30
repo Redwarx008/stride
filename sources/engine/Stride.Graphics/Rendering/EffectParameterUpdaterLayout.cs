@@ -27,7 +27,7 @@ namespace Stride.Rendering
         /// <summary>
         ///   A description of how a collection of parameters map to binding slots and Constant Buffer data.
         /// </summary>
-        internal ParameterCollectionLayout ParameterCollectionLayout = new();
+        public ParameterCollectionLayout ParameterCollectionLayout { get; } = new();
 
 
         /// <summary>

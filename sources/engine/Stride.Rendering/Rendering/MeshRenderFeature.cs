@@ -236,7 +236,9 @@ namespace Stride.Rendering
                 }
                 else
                 {
-                    if (renderMesh.InstanceCount > 0)
+                    if (renderMesh.IndirectBuffer != null)
+                        commandList.DrawIndexedInstanced(renderMesh.IndirectBuffer, renderMesh.IndirectArgumentOffset);
+                    else if (renderMesh.InstanceCount > 0)
                         commandList.DrawIndexedInstanced(drawData.DrawCount, renderMesh.InstanceCount, drawData.StartLocation);
                     else
                         commandList.DrawIndexed(drawData.DrawCount, drawData.StartLocation);

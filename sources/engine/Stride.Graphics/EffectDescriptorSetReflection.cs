@@ -2,6 +2,7 @@
 // Distributed under the MIT license. See the LICENSE.md file in the project root for more information.
 
 using System.Collections.Generic;
+using System;
 using System.Linq;
 
 using Stride.Shaders;
@@ -14,7 +15,7 @@ namespace Stride.Graphics;
 ///   <br/>
 ///   This includes the bindings for Graphics Resources such as Textures, Buffers, and Sampler States.
 /// </summary>
-public class EffectDescriptorSetReflection
+public class EffectDescriptorSetReflection : IDisposable
 {
     /// <summary>
     ///   Gets the default Descriptor Set slot name used for the Graphics Resources in this Effect / Shader when no slot name is specified.
@@ -25,6 +26,9 @@ public class EffectDescriptorSetReflection
     ///   Gets a list of Descriptor Set layouts that describe the bindings for Graphics Resources.
     /// </summary>
     internal List<LayoutEntry> Layouts { get; } = [];
+
+    private readonly List<SamplerState> ownedImmutableSamplers = [];
+    private bool disposed;
 
 
     /// <summary>
@@ -74,7 +78,10 @@ public class EffectDescriptorSetReflection
                 {
                     var matchingSamplerState = effectBytecode.Reflection.SamplerStates.FirstOrDefault(x => x.Key == resourceBinding.Key.Key);
                     if (matchingSamplerState is not null)
+                    {
                         samplerState = SamplerState.New(graphicsDevice, in matchingSamplerState.Description);
+                        descriptorSetLayouts.ownedImmutableSamplers.Add(samplerState);
+                    }
                 }
                 hasBindings = true;
 
@@ -143,6 +150,20 @@ public class EffectDescriptorSetReflection
     public void AddLayout(string descriptorSetName, DescriptorSetLayoutBuilder descriptorSetLayoutBuilder)
     {
         Layouts.Add(new LayoutEntry(descriptorSetName, descriptorSetLayoutBuilder));
+    }
+
+    public void Dispose()
+    {
+        if (disposed)
+            return;
+
+        disposed = true;
+        foreach (var sampler in ownedImmutableSamplers)
+        {
+            sampler.Dispose();
+        }
+
+        ownedImmutableSamplers.Clear();
     }
 
 

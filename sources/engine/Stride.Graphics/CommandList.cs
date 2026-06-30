@@ -457,6 +457,19 @@ namespace Stride.Graphics
         #endregion
 
         /// <summary>
+        ///   Unbinds all Shader Resource View slots currently referencing the specified resource.
+        /// </summary>
+        /// <param name="shaderResourceView">The Shader Resource View resource to unbind from shader stages.</param>
+        public void UnsetShaderResourceViews(GraphicsResource shaderResourceView)
+        {
+            ArgumentNullException.ThrowIfNull(shaderResourceView);
+
+            UnsetShaderResourceViewsImpl(shaderResourceView);
+        }
+
+        private partial void UnsetShaderResourceViewsImpl(GraphicsResource shaderResourceView);
+
+        /// <summary>
         ///   Resets a Command List back to its initial state as if a new Command List was just created.
         /// </summary>
         public unsafe partial void Reset();

@@ -1070,6 +1070,7 @@ namespace Stride.Rendering
             {
                 var effectReflection = effect.Value;
                 effectReflection.RootSignature.Dispose();
+                effectReflection.DescriptorReflection?.Dispose();
                 effectReflection.PerDrawLayout?.DescriptorSetLayout.Dispose();
                 effectReflection.PerViewLayout?.DescriptorSetLayout.Dispose();
                 effectReflection.PerFrameLayout?.DescriptorSetLayout.Dispose();

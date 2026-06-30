@@ -50,4 +50,5 @@ public class RootSignature : GraphicsResourceBase
     {
         return true;
     }
+
 }

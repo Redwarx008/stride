@@ -64,6 +64,9 @@ namespace Stride.Rendering
             RootSignature?.Dispose();
             RootSignature = null;
 
+            DescriptorReflection?.Dispose();
+            DescriptorReflection = null;
+
             bufferUploader.Clear();
 
             base.Destroy();
@@ -101,6 +104,7 @@ namespace Stride.Rendering
                 // Update reflection and rearrange Buffers / resources
                 var effectBytecode = Effect?.Bytecode;
                 var layoutNames = effectBytecode.Reflection.ResourceBindings.Select(x => x.ResourceGroup ?? "Globals").Distinct().ToList();
+                DescriptorReflection?.Dispose();
                 DescriptorReflection = EffectDescriptorSetReflection.New(graphicsDevice, effectBytecode, layoutNames, defaultSetSlot: "Globals");
 
                 RootSignature?.Dispose();

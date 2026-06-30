@@ -44,6 +44,7 @@ namespace Stride.Graphics
 
         private readonly Buffer[] constantBuffers = new Buffer[StageCount * ConstantBufferCount];
         private readonly SamplerState[] samplerStates = new SamplerState[StageCount * SamplerStateCount];
+        private readonly GraphicsResource[] shaderResourceViews = new GraphicsResource[StageCount * ShaderResourceViewCount];
 
         private PipelineState currentPipelineState;
 
@@ -145,6 +146,7 @@ namespace Stride.Graphics
 
             Array.Clear(samplerStates);
             Array.Clear(constantBuffers);
+            Array.Clear(shaderResourceViews);
 
             Array.Clear(unorderedAccessViews);
             Array.Clear(currentRenderTargetViews);
@@ -401,6 +403,9 @@ namespace Stride.Graphics
             if (stage == ShaderStage.None)
                 throw new ArgumentException($"Cannot use {nameof(ShaderStage)}.{nameof(ShaderStage.None)}", nameof(stage));
 
+            int stageIndex = (int) stage - 1;
+            shaderResourceViews[stageIndex * ShaderResourceViewCount + slot] = shaderResourceView;
+
             var nativeShaderResourceView = shaderResourceView is not null ? shaderResourceView.NativeShaderResourceView : default;
 
             switch (stage)
@@ -411,6 +416,22 @@ namespace Stride.Graphics
                 case ShaderStage.Geometry: nativeDeviceContext->GSSetShaderResources((uint) slot, NumViews: 1, ref nativeShaderResourceView); break;
                 case ShaderStage.Pixel: nativeDeviceContext->PSSetShaderResources((uint) slot, NumViews: 1, ref nativeShaderResourceView); break;
                 case ShaderStage.Compute: nativeDeviceContext->CSSetShaderResources((uint) slot, NumViews: 1, ref nativeShaderResourceView); break;
+            }
+        }
+
+        private partial void UnsetShaderResourceViewsImpl(GraphicsResource shaderResourceView)
+        {
+            for (int stageIndex = 0; stageIndex < StageCount; stageIndex++)
+            {
+                var stage = (ShaderStage) (stageIndex + 1);
+                for (int slot = 0; slot < ShaderResourceViewCount; slot++)
+                {
+                    int slotIndex = stageIndex * ShaderResourceViewCount + slot;
+                    if (ReferenceEquals(shaderResourceViews[slotIndex], shaderResourceView))
+                    {
+                        SetShaderResourceView(stage, slot, null);
+                    }
+                }
             }
         }
 

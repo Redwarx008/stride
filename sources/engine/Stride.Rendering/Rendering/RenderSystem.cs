@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using Stride.Core;
 using Stride.Core.Collections;
@@ -29,6 +31,7 @@ namespace Stride.Rendering
         private Texture[] renderTargets;
 
         private readonly Dictionary<Type, List<RootRenderFeature>> renderFeaturesByType = new Dictionary<Type, List<RootRenderFeature>>();
+        private readonly Dictionary<Type, List<RootRenderFeature>> compatibleRenderFeaturesByConcreteType = new Dictionary<Type, List<RootRenderFeature>>();
 
         private static readonly ProfilingKey CreateObjectNodesKey = new ProfilingKey($"{nameof(RenderSystem)}.CreateObjectNodes");
         private static readonly ProfilingKey SortRenderObjectsKey = new ProfilingKey($"{nameof(RenderSystem)}.Sort Render Objects");
@@ -552,17 +555,143 @@ namespace Stride.Rendering
         /// <param name="renderObject"></param>
         public void AddRenderObject(RenderObject renderObject)
         {
-            List<RootRenderFeature> renderFeatures;
+            if (renderObject == null) throw new ArgumentNullException(nameof(renderObject));
 
-            if (renderFeaturesByType.TryGetValue(renderObject.GetType(), out renderFeatures))
+            List<RootRenderFeature> renderFeatures;
+            var renderObjectType = renderObject.GetType();
+
+            if (renderFeaturesByType.TryGetValue(renderObjectType, out renderFeatures))
             {
-                // Try each available compatible render feature
+                if (renderFeatures.Count > 1)
+                    throw CreateAmbiguousRenderFeatureRouteException(renderObjectType, renderFeatures);
+
+                // Exact route is deterministic after duplicate exact routes have been rejected.
                 foreach (var renderFeature in renderFeatures)
                 {
-                    if (renderFeature.TryAddRenderObject(renderObject))
+                    if (TryAddRenderObject(renderFeature, renderObject))
                         break;
                 }
+
+                return;
             }
+
+            if (!compatibleRenderFeaturesByConcreteType.TryGetValue(renderObjectType, out renderFeatures))
+            {
+                renderFeatures = FindCompatibleRenderFeatures(renderObjectType);
+                compatibleRenderFeaturesByConcreteType.Add(renderObjectType, renderFeatures);
+            }
+
+            if (renderFeatures.Count == 0)
+                return;
+
+            if (renderFeatures.Count > 1)
+                throw CreateAmbiguousRenderFeatureRouteException(renderObjectType, renderFeatures);
+
+            TryAddRenderObject(renderFeatures[0], renderObject);
+        }
+
+        private static bool TryAddRenderObject(RootRenderFeature renderFeature, RenderObject renderObject)
+        {
+            Debug.Assert(renderFeature.SupportedRenderObjectType.IsAssignableFrom(renderObject.GetType()));
+            var added = renderFeature.TryAddRenderObject(renderObject);
+            Debug.Assert(renderFeature.SupportedRenderObjectType.IsAssignableFrom(renderObject.GetType()));
+            return added;
+        }
+
+        private List<RootRenderFeature> FindCompatibleRenderFeatures(Type renderObjectType)
+        {
+            var closestDistance = int.MaxValue;
+            var closestRenderFeatures = new List<RootRenderFeature>();
+
+            foreach (var renderFeature in RenderFeatures)
+            {
+                var supportedRenderObjectType = renderFeature.SupportedRenderObjectType;
+                if (!supportedRenderObjectType.IsAssignableFrom(renderObjectType))
+                    continue;
+
+                var distance = ComputeTypeDistance(renderObjectType, supportedRenderObjectType);
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestRenderFeatures.Clear();
+                    closestRenderFeatures.Add(renderFeature);
+                }
+                else if (distance == closestDistance)
+                {
+                    closestRenderFeatures.Add(renderFeature);
+                }
+            }
+
+            return closestRenderFeatures;
+        }
+
+        private static InvalidOperationException CreateAmbiguousRenderFeatureRouteException(Type renderObjectType, List<RootRenderFeature> renderFeatures)
+        {
+            var distance = ComputeTypeDistance(renderObjectType, renderFeatures[0].SupportedRenderObjectType);
+            var candidates = string.Join(
+                ", ",
+                renderFeatures.Select(renderFeature => $"{renderFeature.GetType().FullName} supports {renderFeature.SupportedRenderObjectType.FullName}"));
+
+            return new InvalidOperationException(
+                $"Ambiguous render feature route for concrete type {renderObjectType.FullName} at distance {distance}: {candidates}");
+        }
+
+        private static int ComputeTypeDistance(Type concreteType, Type supportedType)
+        {
+            if (concreteType == supportedType)
+                return 0;
+
+            if (!supportedType.IsAssignableFrom(concreteType))
+                return int.MaxValue;
+
+            if (!supportedType.IsInterface)
+            {
+                var distance = 0;
+                for (var currentType = concreteType; currentType != null; currentType = currentType.BaseType)
+                {
+                    if (currentType == supportedType)
+                        return distance;
+
+                    distance++;
+                }
+
+                return int.MaxValue;
+            }
+
+            var visitedTypes = new HashSet<Type>();
+            var pendingTypes = new Queue<(Type Type, int Distance)>();
+            pendingTypes.Enqueue((concreteType, 0));
+
+            while (pendingTypes.Count > 0)
+            {
+                var (currentType, distance) = pendingTypes.Dequeue();
+                if (!visitedTypes.Add(currentType))
+                    continue;
+
+                if (currentType == supportedType)
+                    return distance;
+
+                foreach (var interfaceType in GetDirectInterfaces(currentType))
+                    pendingTypes.Enqueue((interfaceType, distance + 1));
+
+                if (!currentType.IsInterface && currentType.BaseType != null)
+                    pendingTypes.Enqueue((currentType.BaseType, distance + 1));
+            }
+
+            return int.MaxValue;
+        }
+
+        private static IEnumerable<Type> GetDirectInterfaces(Type type)
+        {
+            var interfaces = new HashSet<Type>(type.GetInterfaces());
+
+            if (!type.IsInterface && type.BaseType != null)
+                interfaces.ExceptWith(type.BaseType.GetInterfaces());
+
+            foreach (var interfaceType in interfaces.ToArray())
+                interfaces.ExceptWith(interfaceType.GetInterfaces());
+
+            return interfaces;
         }
 
         /// <summary>
@@ -597,6 +726,8 @@ namespace Stride.Rendering
 
         private void RenderFeatures_CollectionChanged(object sender, ref FastTrackingCollectionChangedEventArgs e)
         {
+            compatibleRenderFeaturesByConcreteType.Clear();
+
             var renderFeature = (RootRenderFeature)e.Item;
 
             switch (e.Action)

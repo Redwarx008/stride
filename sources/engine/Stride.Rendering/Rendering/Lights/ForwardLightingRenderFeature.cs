@@ -104,6 +104,13 @@ namespace Stride.Rendering.Lights
         [Category]
         [MemberCollection(CanReorderItems = true, NotNullItems = true)]
         public TrackingCollection<LightGroupRendererBase> LightRenderers => lightRenderers;
+
+        public bool TryGetRenderViewLightData(RenderView renderView, out RenderViewLightData renderViewLightData)
+        {
+            if (renderView == null) throw new ArgumentNullException(nameof(renderView));
+
+            return renderViewDatas.TryGetValue(renderView.LightingView ?? renderView, out renderViewLightData);
+        }
         
         [DataMember]
         public IShadowMapRenderer ShadowMapRenderer
